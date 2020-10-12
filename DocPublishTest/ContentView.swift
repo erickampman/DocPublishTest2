@@ -11,7 +11,12 @@ struct ContentView: View {
     @Binding var document: DocPublishTestDocument
 
     var body: some View {
-        TextEditor(text: $document.text)
+		VStack {
+			ForEach(document.data.indices, id: \.self)  { index in
+				Text(document.data[index].name)
+				Slider(value: $document.data[index].value)
+			}
+		}
     }
 }
 

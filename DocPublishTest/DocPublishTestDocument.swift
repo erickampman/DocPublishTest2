@@ -6,34 +6,59 @@
 //
 
 import SwiftUI
+import Combine
 import UniformTypeIdentifiers
 
-extension UTType {
-    static var exampleText: UTType {
-        UTType(importedAs: "com.example.plain-text")
-    }
+struct DocData: Codable {
+	let name: String
+	var value: Double
 }
 
-struct DocPublishTestDocument: FileDocument {
-    var text: String
+extension UTType {
+	static let dpt = UTType(exportedAs: "com.unlikelyware.dpt")
+}
+
+class DocPublishTestDocument: FileDocument, ObservableObject {
+	@Published var data: [DocData]
+	var subscriber: AnyCancellable!
 
     init(text: String = "Hello, world!") {
-        self.text = text
+		self.data = [ DocData(name: "data1", value: Double.pi) ]
+		
+		setupSink()
     }
 
-    static var readableContentTypes: [UTType] { [.exampleText] }
+	static var readableContentTypes: [UTType] { [.dpt] }
+	static var writableContentTypes: [UTType] { [.dpt] }
+	
 
-    init(configuration: ReadConfiguration) throws {
-        guard let data = configuration.file.regularFileContents,
-              let string = String(data: data, encoding: .utf8)
-        else {
-            throw CocoaError(.fileReadCorruptFile)
-        }
-        text = string
-    }
-    
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        let data = text.data(using: .utf8)!
-        return .init(regularFileWithContents: data)
-    }
+	required init(configuration: ReadConfiguration) throws {
+		guard let data = configuration.file.regularFileContents else {
+			throw CocoaError(.fileReadCorruptFile)
+		}
+		do {
+			let tdata = try JSONDecoder().decode([DocData].self, from: data)
+			self.data = tdata
+			
+			setupSink()
+		}
+		catch {
+			throw CocoaError(.fileReadCorruptFile)
+		}
+	}
+
+	func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+		do {
+			let edata = try JSONEncoder().encode(data)
+			return FileWrapper(regularFileWithContents: edata)
+		}
+		catch {
+			throw CocoaError(.fileWriteUnknown)
+		}
+	}
+	
+	func setupSink() {
+		subscriber = $data.sink(receiveCompletion: { print("Completion: \($0)")},
+				   receiveValue: { print("Data: \($0)")})
+	}
 }
